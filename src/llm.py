@@ -14,11 +14,11 @@ LLM_BASE_URL = os.getenv("LLM_BASE_URL", "http://localhost:11434/v1").rstrip("/"
 LLM_API_KEY = os.getenv("LLM_API_KEY", "")
 LLM_MODEL = os.getenv("LLM_MODEL", "llama3.2:3b")
 
-_backend = "ollama"
-if "3001" in LLM_BASE_URL or "freellmapi" in LLM_BASE_URL.lower():
-    _backend = "freellmapi"
-elif "11434" in LLM_BASE_URL or "ollama" in LLM_BASE_URL.lower():
+_backend = "freellmapi"
+if "11434" in LLM_BASE_URL or "ollama" in LLM_BASE_URL.lower():
     _backend = "ollama"
+elif "3001" in LLM_BASE_URL or "freellmapi" in LLM_BASE_URL.lower():
+    _backend = "freellmapi"
 
 BACKENDS = {
     "ollama": {
