@@ -232,8 +232,10 @@ def _automation_loop(profile: dict, keyword: str, interval_minutes: int, log_cal
                 log_callback(f"[{dt}] {count} ofertas nuevas enviadas por Telegram")
             else:
                 log_callback(f"[{dt}] Sin ofertas nuevas")
+                send_telegram(f"🤖 JobMatch [{dt}]: se completó la búsqueda pero no se encontraron ofertas nuevas.")
         except Exception as e:
             log_callback(f"[{dt}] Error: {e}")
+            send_telegram(f"⚠️ JobMatch [{dt}]: error durante la búsqueda automática: {e}")
         next_run = time.time() + interval_secs
         while time.time() < next_run and not _automation_stop.is_set():
             time.sleep(5)
