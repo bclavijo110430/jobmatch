@@ -1,0 +1,39 @@
+services:
+  app:
+    build: .
+    container_name: jobmatch-app
+    network_mode: host
+    environment:
+      OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434/v1}
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
+      FREELLMAPI_BASE_URL: ${FREELLMAPI_BASE_URL:-http://localhost:3001/v1}
+      FREELLMAPI_API_KEY: ${FREELLMAPI_API_KEY:-}
+      FREELLMAPI_MODEL: ${FREELLMAPI_MODEL:-auto}
+      LLM_BASE_URL: ${LLM_BASE_URL:-http://localhost:11434/v1}
+      LLM_API_KEY: ${LLM_API_KEY:-}
+      LLM_MODEL: ${LLM_MODEL:-llama3.2:3b}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      AUTO_START: ${AUTO_START:-false}
+      AUTO_INTERVAL: ${AUTO_INTERVAL:-30}
+      AUTO_KEYWORD: ${AUTO_KEYWORD:-}
+    volumes:
+      - jobmatch-data:/app/data
+    restart: unless-stopped
+
+  freellmapi:
+    image: ghcr.io/tashfeenahmed/freellmapi:latest
+    container_name: freellmapi
+    profiles: ["freellmapi"]
+    ports:
+      - "3001:3001"
+    environment:
+      ENCRYPTION_KEY: ${FREELLMAPI_ENCRYPTION_KEY:-}
+      PORT: 3001
+    volumes:
+      - freellmapi-data:/app/server/data
+    restart: unless-stopped
+
+volumes:
+  jobmatch-data:
+  freellmapi-data:
