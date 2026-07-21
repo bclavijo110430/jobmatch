@@ -12,6 +12,8 @@ Plataforma inteligente de búsqueda de empleo que analiza tu CV, busca ofertas e
 | 🎯 **Filtro por relevancia** | Solo las ofertas que coinciden con skills/cargo del CV pasan al LLM (ahorro de tokens) |
 | 📋 **Filtros avanzados** | Palabra clave, modalidad, ubicación, salario mínimo, nivel de inglés, empresa, experiencia |
 | ⭐ **Ofertas guardadas** | Base de datos SQLite para favoritos con fechas de publicación y guardado |
+| 🔔 **Ofertas detectadas** | Cada oferta que pasa el filtro IA y se envía por Telegram se persiste en SQLite y se muestra en la pestaña **Detectadas** (con keyword que hizo match) |
+| 💾 **Estado persistente** | CV, profile, nivel de inglés, config de automatización, logs y ofertas detectadas sobreviven reinicios/paradas del contenedor vía tabla `app_state` + volumen Docker |
 | 🎤 **Entrevista simulada** | LLM actúa como reclutador contextualizado al CV + oferta seleccionada |
 | ⚡ **Automatización** | Búsqueda automática cada X minutos con IA + notificaciones por Telegram |
 | 🧠 **Filtro IA por keyword** | La automatización usa el LLM para filtrar ofertas semánticamente por `AUTO_KEYWORD` (seniority, rol, stack) antes de notificar |
@@ -26,7 +28,7 @@ Plataforma inteligente de búsqueda de empleo que analiza tu CV, busca ofertas e
 | Backends LLM | Ollama (`llama3.2:3b`) · FreeLLMAPI (`auto`) |
 | PDF parsing | PyMuPDF |
 | Scraping | requests + BeautifulSoup (Computrabajo, Elempleo) |
-| Base de datos | SQLite (ofertas guardadas + notificadas) |
+| Base de datos | SQLite (favoritos + detectadas + notificadas + estado KV) |
 | Notificaciones | Telegram Bot API |
 | Despliegue | Docker + Docker Compose |
 | Orquestación | Makefile |
@@ -112,7 +114,7 @@ jobmatch/
     ├── filters.py          # Filtros: país, modalidad, salario, inglés, relevancia CV
     ├── english.py          # LLM estima nivel de inglés (candidato + ofertas)
     ├── interview.py        # Entrevista simulada con reclutador LLM
-    ├── database.py         # SQLite: ofertas guardadas + notificadas
+    ├── database.py         # SQLite: favoritos + detectadas + notificadas + estado KV (app_state)
     ├── automation.py       # Background thread: búsqueda automática + filtro IA por keyword + Telegram
     └── auto_starter.py     # Proceso standalone para auto-start en Docker
 ```
@@ -153,11 +155,12 @@ La pestaña **Automatización** programa búsquedas periódicas con los criterio
 
 1. Cada N minutos (mín. 1 min) busca en Computrabajo + Elempleo (~40 ofertas crudas)
 2. **Filtro IA por keyword**: envía las ofertas en lotes de 20 al LLM con las keywords de `AUTO_KEYWORD` (p.ej. `devops sr`, `SRE`, `mlops`, `intermedio`). La IA devuelve los índices que coinciden semánticamente (entiende seniority `sr/semi senior/intermedio/junior`, rol y stack), más allá de coincidencias exactas de texto. Si la API falla, conserva el lote completo para no perder ofertas.
-3. Filtra por skills/cargo del CV con `filter_by_cv_relevance()` (solo relevantes)
+3. Filtra por skills/cargo del CV con `filter_by_cv_relevance()` (solo relevantes; si no hay CV persistido, todo pasa como relevante)
 4. Formatea con LLM, enriquece nivel de inglés y filtra por país/modalidad
 5. Envía por Telegram solo las **ofertas nuevas** (no notificadas antes)
-6. Dedup con **TTL**: una URL no se re-notifica hasta que pasen `NOTIFIED_TTL_MINUTES` (default 1440 = 24 h). Pasado el TTL puede volver a notificarse.
-7. Se inicia automáticamente con el contenedor si `AUTO_START=true`
+6. **Persiste cada oferta notificada** en `discovered_jobs` (visible en la pestaña **Detectadas**)
+7. Dedup con **TTL**: una URL no se re-notifica hasta que pasen `NOTIFIED_TTL_MINUTES` (default 1440 = 24 h). Pasado el TTL puede volver a notificarse.
+8. Se inicia automáticamente con el contenedor si `AUTO_START=true` (cargando el CV persistido desde la BD si exists)
 
 ### Variables de entorno
 
@@ -173,6 +176,35 @@ La pestaña **Automatización** programa búsquedas periódicas con los criterio
 - **▶️ Iniciar / ⏹️ Detener**: arranca/para el thread en vivo.
 - **🧹 Resetear**: borra el historial de URLs ya notificadas (para testing inmediato o forzar reenvío).
 - **🔔 Probar notificación**: envía un mensaje de prueba a Telegram.
+
+## 💾 Persistencia entre reinicios
+
+Todo sobrevive a `docker compose down/up`, `restart` o `stop/start` (vía SQLite + volumen `jobmatch-data`):
+
+| Tabla | Propósito |
+|---|---|
+| `saved_jobs` | Ofertas guardadas manualmente como favoritas |
+| `discovered_jobs` | Ofertas detectadas por la automatización (con keyword que hizo match y timestamp) — pestaña **Detectadas** |
+| `notified_jobs` | Dedup de Telegram (con TTL) |
+| `app_state` | Almacén KV para: `cv_text`, `cv_profile`, `candidate_level`, `auto_interval`, `auto_keyword`, `auto_logs` |
+
+Al iniciar la app:
+- `load_all_app_state()` restaura CV + perfil + config + logs a `st.session_state`.
+- Subir un CV nuevo → `save_app_state("cv_text", text)` etc.
+- Cambiar interval/keyword → `save_app_state(...)` automáticamente.
+- `auto_starter.py` lee `cv_profile` de la BD antes de arrancar → la automatización funciona sin UI tras reinicio.
+- Pestaña **Detectadas**: vaciar histórico o mover/eliminar individualmente.
+
+## 🗂 Pestañas
+
+| Pestaña | Descripción |
+|---|---|
+| **Ofertas** | Resultado de la búsqueda manual + filtros avanzados |
+| **Detectadas** | Ofertas detectadas por la automatización (persistidas) |
+| **Entrevista** | Simulación de entrevista con el LLM |
+| **Favoritos** | Ofertas guardadas manualmente (persistidas) |
+| **Automatización** | Config Telegram + programación + logs |
+| **Resumen** | Estadísticas del perfil y compatibilidad |
 
 ### Configurar Telegram
 

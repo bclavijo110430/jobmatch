@@ -14,7 +14,12 @@ from src.filters import (
 from src.english import estimate_candidate_level, enrich_offers_with_english
 from src.interview import start_interview, continue_interview
 from src.llm import configure, get_available_backends, get_provider_info
-from src.database import save_job, unsave_job, get_saved_jobs, is_saved, count_saved
+from src.database import (
+    save_job, unsave_job, get_saved_jobs, is_saved, count_saved,
+    save_app_state, load_all_app_state, delete_app_state,
+    get_discovered_jobs, count_discovered, delete_discovered_job,
+    clear_discovered_jobs, save_discovered_job,
+)
 from src import automation
 
 st.set_page_config(page_title="JobMatch - Búsqueda Inteligente de Empleo", layout="wide", page_icon="💼")
@@ -387,6 +392,26 @@ for key, default in [
     if key not in st.session_state:
         st.session_state[key] = default
 
+# --- Restore persisted state from DB (survives restart/stop) ---
+if "state_restored" not in st.session_state:
+    st.session_state.state_restored = True
+    persisted = load_all_app_state()
+    if "cv_text" in persisted and isinstance(persisted["cv_text"], str) and persisted["cv_text"]:
+        st.session_state.cv_text = persisted["cv_text"]
+    if "cv_profile" in persisted and isinstance(persisted["cv_profile"], dict):
+        st.session_state.cv_profile = persisted["cv_profile"]
+    if "candidate_level" in persisted and persisted["candidate_level"]:
+        st.session_state.candidate_level = persisted["candidate_level"]
+    if "auto_interval" in persisted and persisted["auto_interval"]:
+        try:
+            st.session_state.auto_interval = int(persisted["auto_interval"])
+        except (TypeError, ValueError):
+            pass
+    if "auto_keyword" in persisted and isinstance(persisted["auto_keyword"], str):
+        st.session_state.auto_keyword = persisted["auto_keyword"]
+    if "auto_logs" in persisted and isinstance(persisted["auto_logs"], list):
+        st.session_state.auto_logs = persisted["auto_logs"]
+
 configure(st.session_state.llm_backend)
 
 # --- auto-start detection ---
@@ -394,8 +419,17 @@ if os.getenv("AUTO_START", "false").lower() == "true":
     if "auto_started" not in st.session_state:
         st.session_state.auto_started = True
         st.session_state.automation_active = True
-        st.session_state.auto_interval = int(os.getenv("AUTO_INTERVAL", "30"))
-        st.session_state.auto_keyword = os.getenv("AUTO_KEYWORD", "")
+        env_interval = os.getenv("AUTO_INTERVAL", "")
+        if env_interval:
+            try:
+                st.session_state.auto_interval = int(env_interval)
+                save_app_state("auto_interval", st.session_state.auto_interval)
+            except ValueError:
+                pass
+        env_keyword = os.getenv("AUTO_KEYWORD", "")
+        if env_keyword:
+            st.session_state.auto_keyword = env_keyword
+            save_app_state("auto_keyword", st.session_state.auto_keyword)
         st.rerun()
 
 # ======================== HEADER ========================
@@ -437,6 +471,25 @@ with col_profile:
     with st.container(border=True):
         st.markdown('<div class="jm-card-title">👤 Tu Perfil</div>', unsafe_allow_html=True)
         cv_file = st.file_uploader("CV (PDF)", type=["pdf"], help="PDF con texto extraíble", label_visibility="collapsed", accept_multiple_files=False)
+        if st.session_state.cv_text and not cv_file:
+            st.caption(f"💾 CV persistido en BD · Nivel de inglés: **{st.session_state.candidate_level or '?'}**")
+            profile = st.session_state.cv_profile
+            if profile.get("skills"):
+                st.caption(f"Habilidades: {', '.join(profile['skills'][:8])}")
+            if profile.get("target_titles"):
+                st.caption(f"Cargos: {', '.join(profile['target_titles'][:3])}")
+            if profile.get("years_experience"):
+                st.caption(f"Experiencia: {profile['years_experience']} años")
+            if profile.get("search_keywords"):
+                st.caption(f"Keywords: {', '.join(profile['search_keywords'][:5])}")
+            if st.button("🗑️ Borrar CV persistido", use_container_width=True):
+                delete_app_state("cv_text")
+                delete_app_state("cv_profile")
+                delete_app_state("candidate_level")
+                st.session_state.cv_text = ""
+                st.session_state.cv_profile = {}
+                st.session_state.candidate_level = None
+                st.rerun()
         if cv_file is not None:
             with st.spinner("Analizando CV..."):
                 pdf_bytes = cv_file.read()
@@ -446,6 +499,9 @@ with col_profile:
                 st.session_state.candidate_level = level
                 profile = analyze_cv(text)
                 st.session_state.cv_profile = profile
+                save_app_state("cv_text", text)
+                save_app_state("candidate_level", level)
+                save_app_state("cv_profile", profile)
             st.success(f"✅ CV analizado · Nivel de inglés: **{level}**")
             profile = st.session_state.cv_profile
             if profile.get("skills"):
@@ -583,12 +639,12 @@ if has_jobs:
     jobs.sort(key=_sort_key_date, reverse=True)
 
 # ======================== TAB NAVIGATION ========================
-tab_labels = ["Ofertas", "Entrevista", "Favoritos", "Automatización", "Resumen"]
+tab_labels = ["Ofertas", "Detectadas", "Entrevista", "Favoritos", "Automatización", "Resumen"]
 if st.session_state.active_tab not in tab_labels:
     st.session_state.active_tab = "Ofertas"
 
 st.markdown('<div class="sticky-nav">', unsafe_allow_html=True)
-tab_cols = st.columns(5)
+tab_cols = st.columns(6)
 for i, label in enumerate(tab_labels):
     btn_type = "primary" if st.session_state.active_tab == label else "secondary"
     with tab_cols[i]:
@@ -692,6 +748,83 @@ if st.session_state.active_tab == "Ofertas":
                         save_job(j)
                         st.session_state.saved_urls.add(job_url)
                         st.rerun()
+
+# ======================== TAB: Detectadas ========================
+elif st.session_state.active_tab == "Detectadas":
+    st.markdown("### 🔔 Ofertas detectadas por la automatización")
+    discovered = get_discovered_jobs()
+    if not discovered:
+        st.markdown("""
+        <div class="jm-empty-state">
+            <h3>🔔 Sin ofertas detectadas aún</h3>
+            <p>Inicia la automatización en la pestaña <strong>Automatización</strong>.<br>
+            Las ofertas que pasen el filtro IA y se envíen por Telegram se guardarán aquí automáticamente.</p>
+        </div>
+        """, unsafe_allow_html=True)
+    else:
+        st.markdown(
+            f'<div class="jm-stat-highlight"><span>📌 <strong>{len(discovered)}</strong> '
+            f'oferta(s) detectada(s) por la IA · persiste entre reinicios</span></div>',
+            unsafe_allow_html=True,
+        )
+        col_clear, _ = st.columns([1, 5])
+        if col_clear.button("🗑️ Vaciar histórico", use_container_width=True):
+            clear_discovered_jobs()
+            st.rerun()
+
+        def _eng_badge_d(level):
+            c = "jm-badge-neutral"
+            if level in ("C1-C2", "C1", "C2"): c = "jm-badge-success"
+            elif level in ("B1-B2", "B1", "B2"): c = "jm-badge-primary"
+            elif level in ("A1-A2", "A1", "A2"): c = "jm-badge-warning"
+            return f'<span class="jm-badge {c}">{level}</span>'
+
+        def _mod_badge_d(m):
+            if m in ("Remoto", "Remote"): return '<span class="jm-badge jm-badge-success">🏠 Remoto</span>'
+            elif m in ("Híbrido", "Hybrid"): return '<span class="jm-badge jm-badge-primary">🔄 Híbrido</span>'
+            elif m in ("Presencial", "On-site"): return '<span class="jm-badge jm-badge-neutral">🏢 Presencial</span>'
+            return f'<span class="jm-badge jm-badge-neutral">{m or "N/A"}</span>'
+
+        for d in discovered:
+            with st.container(border=True):
+                url = d.get("url", "")
+                title = d.get("title", "Sin título")
+                company = d.get("company", "No disponible")
+                location = d.get("location", "N/A")
+                eng = d.get("english_level", "Ninguno")
+                modality = d.get("modality", "No especificado")
+                detected = (d.get("detected_at") or "")[:16].replace("T", " ")
+                match_kw = d.get("match_keywords") or ""
+
+                cols = st.columns([5, 2])
+                if url:
+                    cols[0].markdown(f"### [{title}]({url})", unsafe_allow_html=True)
+                else:
+                    cols[0].markdown(f"### {title}")
+                st.markdown(f"""
+                <div class="jm-meta-row">
+                    <span class="jm-meta-item">🏢 {company}</span>
+                    <span class="jm-meta-item">📍 {location}</span>
+                    <span class="jm-meta-item">🔔 {detected}</span>
+                    {_mod_badge_d(modality)}
+                    {_eng_badge_d(eng)}
+                </div>
+                """, unsafe_allow_html=True)
+                if match_kw:
+                    st.caption(f"🎯 Match keywords: {match_kw}")
+                dsc = d.get("description_short") or "Sin descripción"
+                st.markdown(dsc)
+
+                cbtn1, cbtn2, _ = st.columns([1, 1, 3])
+                if cbtn1.button("⭐ Guardar oferta", key=f"disc_save_{d['id']}", use_container_width=True):
+                    saved = save_job(d)
+                    if saved:
+                        st.success("Movida a Favoritos.")
+                    else:
+                        st.info("Ya estaba en Favoritos.")
+                if cbtn2.button("🗑️ Eliminar", key=f"disc_del_{d['id']}", use_container_width=True):
+                    delete_discovered_job(d["id"])
+                    st.rerun()
 
 # ======================== TAB: Entrevista ========================
 elif st.session_state.active_tab == "Entrevista":
@@ -853,6 +986,8 @@ elif st.session_state.active_tab == "Automatización":
                 else:
                     st.session_state.auto_interval = interval
                     st.session_state.auto_keyword = auto_kw
+                    save_app_state("auto_interval", interval)
+                    save_app_state("auto_keyword", auto_kw)
                     os.environ["TELEGRAM_BOT_TOKEN"] = tg_token
                     os.environ["TELEGRAM_CHAT_ID"] = tg_chat
 
@@ -860,6 +995,7 @@ elif st.session_state.active_tab == "Automatización":
                         st.session_state.auto_logs.append(msg)
                         if len(st.session_state.auto_logs) > 50:
                             st.session_state.auto_logs = st.session_state.auto_logs[-50:]
+                        save_app_state("auto_logs", st.session_state.auto_logs)
 
                     err = automation.start_automation(
                         profile=st.session_state.cv_profile, keyword=auto_kw,
@@ -884,6 +1020,7 @@ elif st.session_state.active_tab == "Automatización":
                     f"[{__import__('datetime').datetime.now().strftime('%H:%M')}] "
                     f"Historial de notificadas reseteado"
                 )
+                save_app_state("auto_logs", st.session_state.auto_logs)
                 st.success("Historial reseteado. Las ofertas ya notificadas volverán a enviarse.")
                 st.rerun()
 

@@ -33,8 +33,18 @@ pid_file = "/app/data/auto_starter.pid"
 with open(pid_file, "w") as f:
     f.write(str(os.getpid()))
 
+# Restore persisted CV profile from DB (if user uploaded a CV via UI before)
+from src.database import load_all_app_state
+persisted = load_all_app_state()
+profile = persisted.get("cv_profile") if isinstance(persisted.get("cv_profile"), dict) else {}
+if profile:
+    print(f"[auto-starter] Restored CV profile: skills={len(profile.get('skills', []))}, "
+          f"titles={len(profile.get('target_titles', []))}")
+else:
+    print("[auto-starter] No persisted CV profile; using keyword-only filtering")
+
 err = start_automation(
-    profile={},
+    profile=profile,
     keyword=keyword,
     interval_minutes=interval,
     log_callback=lambda msg: print(f"[auto] {msg}", flush=True),

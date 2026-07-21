@@ -210,6 +210,10 @@ def _search_and_notify(profile: dict, keyword: str = "", modality: str = ""):
         if url and not _already_notified(url):
             if send_telegram(_format_job_telegram(j)):
                 _mark_notified(url)
+                try:
+                    database.save_discovered_job(j, match_keywords=keyword)
+                except Exception:
+                    pass
                 new_count += 1
             time.sleep(1)
 
