@@ -836,17 +836,17 @@ elif st.session_state.active_tab == "Automatización":
         with ct2:
             with st.container(border=True):
                 st.markdown('<div class="jm-card-title">📅 Programación</div>', unsafe_allow_html=True)
-                interval = st.number_input("Minutos entre búsquedas", min_value=5, max_value=720,
+                interval = st.number_input("Minutos entre búsquedas", min_value=1, max_value=720,
                     value=st.session_state.auto_interval, step=5, key="auto_interval_input")
                 auto_kw = st.text_input("Keyword adicional", value=st.session_state.get("auto_keyword", ""),
                     placeholder="ej: Python, React...", key="auto_keyword_input")
 
         with st.container(border=True):
             st.markdown('<div class="jm-card-title">▶️ Control</div>', unsafe_allow_html=True)
-            is_running = automation.is_automation_running() or os.path.exists("/app/data/auto_starter.pid")
+            is_running = automation.is_automation_running()
             status_badge = '<span class="jm-badge jm-badge-success">🟢 Activa</span>' if is_running else '<span class="jm-badge jm-badge-neutral">⚪ Detenida</span>'
             st.markdown(f'<div style="margin:4px 0 10px 0;">Estado: {status_badge}</div>', unsafe_allow_html=True)
-            col_start, col_stop, _ = st.columns([1, 1, 3])
+            col_start, col_stop, col_reset, _ = st.columns([1, 1, 1, 1])
             if col_start.button("▶️ Iniciar", type="primary", use_container_width=True, disabled=is_running):
                 if not tg_token or not tg_chat:
                     st.error("Configura token y chat ID de Telegram primero.")
@@ -876,6 +876,15 @@ elif st.session_state.active_tab == "Automatización":
                 automation.stop_automation()
                 st.session_state.automation_active = False
                 st.success("Automatización detenida.")
+                st.rerun()
+            if col_reset.button("🧹 Resetear", use_container_width=True,
+                                 help="Borra el historial de URLs ya notificadas para que vuelvan a enviarse."):
+                automation.reset_notified_jobs()
+                st.session_state.auto_logs.append(
+                    f"[{__import__('datetime').datetime.now().strftime('%H:%M')}] "
+                    f"Historial de notificadas reseteado"
+                )
+                st.success("Historial reseteado. Las ofertas ya notificadas volverán a enviarse.")
                 st.rerun()
 
         if st.session_state.auto_logs:

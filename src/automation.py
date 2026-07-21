@@ -1,17 +1,21 @@
 import os
+import json
 import requests
 import threading
 import time
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 
 from src.job_sources import get_jobs
 from src.formatter import format_jobs
 from src.filters import filter_by_cv_relevance, filter_by_country, filter_by_modality
 from src.english import enrich_offers_with_english
+from src.llm import chat_json
 from src import database
 
 TELEGRAM_TOKEN = os.getenv("TELEGRAM_BOT_TOKEN", "")
 TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
+
+NOTIFIED_TTL_MINUTES = max(int(os.getenv("NOTIFIED_TTL_MINUTES", "1440")), 1)
 
 
 def _ensure_notified_table():
@@ -26,12 +30,33 @@ def _ensure_notified_table():
     conn.close()
 
 
+def _purge_old_notified():
+    _ensure_notified_table()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=NOTIFIED_TTL_MINUTES)).isoformat()
+    conn = database._get_conn()
+    conn.execute("DELETE FROM notified_jobs WHERE notified_at < ?", (cutoff,))
+    conn.commit()
+    conn.close()
+
+
+def reset_notified_jobs():
+    _ensure_notified_table()
+    conn = database._get_conn()
+    conn.execute("DELETE FROM notified_jobs")
+    conn.commit()
+    conn.close()
+
+
 def _already_notified(url: str) -> bool:
     if not url:
         return False
     _ensure_notified_table()
+    cutoff = (datetime.now(timezone.utc) - timedelta(minutes=NOTIFIED_TTL_MINUTES)).isoformat()
     conn = database._get_conn()
-    row = conn.execute("SELECT url FROM notified_jobs WHERE url = ?", (url,)).fetchone()
+    row = conn.execute(
+        "SELECT url FROM notified_jobs WHERE url = ? AND notified_at >= ?",
+        (url, cutoff),
+    ).fetchone()
     conn.close()
     return row is not None
 
@@ -42,7 +67,8 @@ def _mark_notified(url: str):
     _ensure_notified_table()
     conn = database._get_conn()
     conn.execute(
-        "INSERT OR IGNORE INTO notified_jobs (url, notified_at) VALUES (?, ?)",
+        "INSERT INTO notified_jobs (url, notified_at) VALUES (?, ?)\n"
+        "ON CONFLICT(url) DO UPDATE SET notified_at = excluded.notified_at",
         (url, datetime.now(timezone.utc).isoformat()),
     )
     conn.commit()
@@ -94,6 +120,57 @@ _automation_thread = None
 _automation_stop = threading.Event()
 
 
+SYSTEM_FILTER = """You are a job-offer filter. Given a list of offers and a set of
+keywords, return the indices of the offers that match at least one keyword
+semantically. Consider seniority (sr/semi senior/intermedio/junior), role and
+technology stack. Be lenient: when in doubt, include the offer.
+Respond ONLY with a JSON object: {"match": [0, 3, 7]} where the numbers are
+zero-based indices into the input list."""
+
+
+def _ai_filter_by_keywords(raw_jobs: list[dict], keywords: str) -> list[dict]:
+    if not raw_jobs or not keywords.strip():
+        return raw_jobs
+    kw_list = [k.strip() for k in keywords.split(",") if k.strip()]
+    if not kw_list:
+        return raw_jobs
+
+    batch_size = 20
+    kept: list[dict] = []
+    for i in range(0, len(raw_jobs), batch_size):
+        batch = raw_jobs[i : i + batch_size]
+        items = [
+            {
+                "index": j,
+                "title": (job.get("title") or "")[:200],
+                "snippet": (job.get("raw_text") or "")[:500],
+            }
+            for j, job in enumerate(batch)
+        ]
+        prompt = (
+            "Keywords to match (an offer matches if it fits ANY of them):\n"
+            + "\n".join(f"- {k}" for k in kw_list)
+            + "\n\nOffers:\n"
+            + json.dumps(items, ensure_ascii=False)
+        )
+        try:
+            result = chat_json(prompt, SYSTEM_FILTER, temperature=0.0)
+        except Exception:
+            result = None
+        if result is None:
+            # LLM/API failure: keep the whole batch to avoid silent drops
+            kept.extend(batch)
+            continue
+        idxs = result.get("match", []) if isinstance(result, dict) else (
+            result if isinstance(result, list) else []
+        )
+        for idx in idxs:
+            if isinstance(idx, int) and 0 <= idx < len(batch):
+                kept.append(batch[idx])
+        time.sleep(0.3)
+    return kept
+
+
 def _search_and_notify(profile: dict, keyword: str = "", modality: str = ""):
     terms = list(profile.get("target_titles", [])) + list(profile.get("search_keywords", []))
     for kw in (keyword or "").split(","):
@@ -113,6 +190,9 @@ def _search_and_notify(profile: dict, keyword: str = "", modality: str = ""):
                     all_raw.append(j)
         except Exception:
             pass
+
+    if keyword.strip():
+        all_raw = _ai_filter_by_keywords(all_raw, keyword)
 
     relevant, _ = filter_by_cv_relevance(all_raw, profile)
     if not relevant:
@@ -142,6 +222,7 @@ def _automation_loop(profile: dict, keyword: str, interval_minutes: int, log_cal
         dt = datetime.now().strftime("%H:%M")
         log_callback(f"[{dt}] Buscando...")
         try:
+            _purge_old_notified()
             count = _search_and_notify(profile, keyword, modality)
             if count:
                 log_callback(f"[{dt}] {count} ofertas nuevas enviadas por Telegram")
@@ -172,7 +253,7 @@ def start_automation(profile: dict, keyword: str = "", interval_minutes: int = 3
     _automation_stop.clear()
     _automation_thread = threading.Thread(
         target=_automation_loop,
-        args=(profile, keyword, max(interval_minutes, 5), log_callback or print, modality),
+        args=(profile, keyword, max(interval_minutes, 1), log_callback or print, modality),
         daemon=True,
     )
     _automation_thread.start()

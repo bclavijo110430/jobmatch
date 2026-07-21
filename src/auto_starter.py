@@ -16,7 +16,7 @@ if not token or not chat:
     print("[auto-starter] Telegram not configured, skipping")
     sys.exit(1)
 
-interval = max(int(os.getenv("AUTO_INTERVAL", "30")), 5)
+interval = max(int(os.getenv("AUTO_INTERVAL", "30")), 1)
 keyword = os.getenv("AUTO_KEYWORD", "")
 
 time.sleep(10)

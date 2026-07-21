@@ -13,7 +13,8 @@ Plataforma inteligente de búsqueda de empleo que analiza tu CV, busca ofertas e
 | 📋 **Filtros avanzados** | Palabra clave, modalidad, ubicación, salario mínimo, nivel de inglés, empresa, experiencia |
 | ⭐ **Ofertas guardadas** | Base de datos SQLite para favoritos con fechas de publicación y guardado |
 | 🎤 **Entrevista simulada** | LLM actúa como reclutador contextualizado al CV + oferta seleccionada |
-| ⚡ **Automatización** | Búsqueda automática cada X minutos con notificaciones por Telegram |
+| ⚡ **Automatización** | Búsqueda automática cada X minutos con IA + notificaciones por Telegram |
+| 🧠 **Filtro IA por keyword** | La automatización usa el LLM para filtrar ofertas semánticamente por `AUTO_KEYWORD` (seniority, rol, stack) antes de notificar |
 | 🔄 **Dual LLM backend** | Ollama (local) o FreeLLMAPI (28 proveedores cloud gratuitos) — switch en vivo desde la UI |
 
 ## 🛠 Stack
@@ -77,7 +78,8 @@ TELEGRAM_CHAT_ID=
 # ========== Automatización ==========
 AUTO_START=true
 AUTO_INTERVAL=5
-AUTO_KEYWORD=devops sr,devops senior
+AUTO_KEYWORD=devops sr,devops,desecopsvops,intermedio,devops semi senior,SRE,mlops
+NOTIFIED_TTL_MINUTES=1440
 
 # ========== Legacy ==========
 LLM_BASE_URL=http://localhost:3001/v1
@@ -111,7 +113,7 @@ jobmatch/
     ├── english.py          # LLM estima nivel de inglés (candidato + ofertas)
     ├── interview.py        # Entrevista simulada con reclutador LLM
     ├── database.py         # SQLite: ofertas guardadas + notificadas
-    ├── automation.py       # Background thread: búsqueda automática + Telegram
+    ├── automation.py       # Background thread: búsqueda automática + filtro IA por keyword + Telegram
     └── auto_starter.py     # Proceso standalone para auto-start en Docker
 ```
 
@@ -125,10 +127,13 @@ CV (PDF)
   └── english.py → nivel de inglés
         │
         ▼
-  job_sources.py → Computrabajo (20) + Elempleo (20) → ~40 ofertas crudas
+job_sources.py → Computrabajo (20) + Elempleo (20) → ~40 ofertas crudas
+        │
+        ▼ (solo en automatización)
+   automation.py →_ai_filter_by_keywords() → LLM compara con AUTO_KEYWORD → ~10-15 ofertas
         │
         ▼
-  filters.py → filter_by_cv_relevance() → relevantes / no relevantes
+   filters.py → filter_by_cv_relevance() → relevantes / no relevantes
         │                    │
         ▼                    ▼
   formatter.py (LLM)     sin procesar
@@ -144,13 +149,30 @@ CV (PDF)
 
 ## 🤖 Automatización
 
-La pestaña **Automatización** programa búsquedas periódicas con los criterios del CV:
+La pestaña **Automatización** programa búsquedas periódicas con los criterios del CV y `AUTO_KEYWORD`:
 
-1. Cada N minutos busca en Computrabajo + Elempleo
-2. Filtra por skills/cargo del CV (solo relevantes)
-3. Envía ofertas nuevas por Telegram
-4. Evita duplicados vía tabla `notified_jobs` en SQLite
-5. Se inicia automáticamente con el contenedor si `AUTO_START=true`
+1. Cada N minutos (mín. 1 min) busca en Computrabajo + Elempleo (~40 ofertas crudas)
+2. **Filtro IA por keyword**: envía las ofertas en lotes de 20 al LLM con las keywords de `AUTO_KEYWORD` (p.ej. `devops sr`, `SRE`, `mlops`, `intermedio`). La IA devuelve los índices que coinciden semánticamente (entiende seniority `sr/semi senior/intermedio/junior`, rol y stack), más allá de coincidencias exactas de texto. Si la API falla, conserva el lote completo para no perder ofertas.
+3. Filtra por skills/cargo del CV con `filter_by_cv_relevance()` (solo relevantes)
+4. Formatea con LLM, enriquece nivel de inglés y filtra por país/modalidad
+5. Envía por Telegram solo las **ofertas nuevas** (no notificadas antes)
+6. Dedup con **TTL**: una URL no se re-notifica hasta que pasen `NOTIFIED_TTL_MINUTES` (default 1440 = 24 h). Pasado el TTL puede volver a notificarse.
+7. Se inicia automáticamente con el contenedor si `AUTO_START=true`
+
+### Variables de entorno
+
+| Variable | Default | Descripción |
+|---|---|---|
+| `AUTO_START` | `false` | Arranca la automatización al levantar el contenedor |
+| `AUTO_INTERVAL` | `30` | Minutos entre búsquedas (mín. 1) |
+| `AUTO_KEYWORD` | — | keywords separadas por coma para el filtro IA |
+| `NOTIFIED_TTL_MINUTES` | `1440` | minutos de TTL del dedup (24 h por defecto) |
+
+### Controles en la UI
+
+- **▶️ Iniciar / ⏹️ Detener**: arranca/para el thread en vivo.
+- **🧹 Resetear**: borra el historial de URLs ya notificadas (para testing inmediato o forzar reenvío).
+- **🔔 Probar notificación**: envía un mensaje de prueba a Telegram.
 
 ### Configurar Telegram
 
