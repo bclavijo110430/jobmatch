@@ -241,6 +241,15 @@ Al iniciar la app:
 4. Visita `https://api.telegram.org/bot<TOKEN>/getUpdates` para obtener tu **chat ID**
 5. Pega el chat ID en `.env` como `TELEGRAM_CHAT_ID`
 
+## 📸 Capturas de pantalla
+
+| Página | Descripción |
+|---|---|
+| ![Ofertas](./docs/screenshots/dashboard.png) | **Dashboard / Ofertas**: sube tu CV, realiza búsquedas y explora el estado de las ofertas. |
+| ![Detectadas](./docs/screenshots/detected.png) | **Detectadas**: ofertas encontradas por la automatización con acciones de ver, entrevistar y guardar. |
+| ![Entrevista](./docs/screenshots/interview.png) | **Entrevista**: simulación de entrevista con un reclutador de IA basada en el CV y la oferta seleccionada. |
+| ![Automatización](./docs/screenshots/automation.png) | **Automatización**: configura el bot de Telegram, intervalo de búsqueda, keywords y revisa el registro. |
+
 ## 🎨 UI / UX
 
 - Tema oscuro monocromático (purple/indigo tones)
