@@ -1,0 +1,54 @@
+---
+import '@/styles/global.css';
+import { ClientRouter } from 'astro:transitions';
+import Sidebar from '@/components/astro/Sidebar.astro';
+import MobileNav from '@/components/astro/MobileNav.astro';
+import Header from '@/components/astro/Header.astro';
+import ToasterProvider from '@/components/react/ToasterProvider.jsx';
+import AppInitializer from '@/components/react/AppInitializer.jsx';
+
+export interface Props {
+  title: string;
+  description?: string;
+}
+
+const { title, description = 'JobMatch - Búsqueda inteligente de empleo' } = Astro.props;
+const pathname = Astro.url.pathname;
+---
+
+<!doctype html>
+<html lang="es" class="dark">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
+    <meta name="generator" content={Astro.generator} />
+    <title>{title}</title>
+    <meta name="description" content={description} />
+    <ClientRouter />
+  </head>
+  <body class="min-h-screen bg-jm-bg text-jm-text antialiased">
+    <div class="flex min-h-screen">
+      <Sidebar currentPath={pathname} />
+      <div class="flex flex-1 flex-col lg:pl-64">
+        <Header />
+        <main class="flex-1 p-4 lg:p-6">
+          <slot />
+        </main>
+      </div>
+    </div>
+    <MobileNav currentPath={pathname} />
+    <ToasterProvider client:load />
+    <AppInitializer client:load />
+  </body>
+</html>
+
+<style is:global>
+  /* Ensure Astro view transitions respect reduced motion */
+  @media (prefers-reduced-motion: reduce) {
+    ::view-transition-old(root),
+    ::view-transition-new(root) {
+      animation: none !important;
+    }
+  }
+</style>

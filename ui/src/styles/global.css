@@ -1,0 +1,206 @@
+@import "tailwindcss";
+@import "@fontsource/inter/400.css";
+@import "@fontsource/inter/500.css";
+@import "@fontsource/inter/600.css";
+@import "@fontsource/inter/700.css";
+@import "tw-animate-css";
+@import "shadcn/tailwind.css";
+
+@custom-variant dark (&:is(.dark *));
+
+@theme {
+  --color-jm-bg: #090B10;
+  --color-jm-surface: #141723;
+  --color-jm-surface-hover: #1A1E2C;
+  --color-jm-card: #161A28;
+  --color-jm-card-hover: #1C2132;
+  --color-jm-elevated: #1E2335;
+  --color-jm-border: #252A3A;
+  --color-jm-border-light: #2E3347;
+  --color-jm-border-accent: rgba(99, 102, 241, 0.35);
+  --color-jm-primary: #6366F1;
+  --color-jm-primary-hover: #5558E6;
+  --color-jm-primary-light: #818CF8;
+  --color-jm-primary-soft: rgba(99, 102, 241, 0.10);
+  --color-jm-primary-ring: rgba(99, 102, 241, 0.30);
+  --color-jm-success: #22C55E;
+  --color-jm-success-soft: rgba(34, 197, 94, 0.10);
+  --color-jm-warning: #F59E0B;
+  --color-jm-warning-soft: rgba(245, 158, 11, 0.10);
+  --color-jm-danger: #EF4444;
+  --color-jm-danger-soft: rgba(239, 68, 68, 0.10);
+  --color-jm-info: #38BDF8;
+  --color-jm-info-soft: rgba(56, 189, 248, 0.10);
+  --color-jm-text: #E2E4EC;
+  --color-jm-text-secondary: #99A1B8;
+  --color-jm-text-muted: #626880;
+  --color-jm-text-bright: #F8FAFC;
+}
+
+@theme inline {
+  --font-heading: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --color-sidebar-ring: var(--sidebar-ring);
+  --color-sidebar-border: var(--sidebar-border);
+  --color-sidebar-accent-foreground: var(--sidebar-accent-foreground);
+  --color-sidebar-accent: var(--sidebar-accent);
+  --color-sidebar-primary-foreground: var(--sidebar-primary-foreground);
+  --color-sidebar-primary: var(--sidebar-primary);
+  --color-sidebar-foreground: var(--sidebar-foreground);
+  --color-sidebar: var(--sidebar);
+  --color-chart-5: var(--chart-5);
+  --color-chart-4: var(--chart-4);
+  --color-chart-3: var(--chart-3);
+  --color-chart-2: var(--chart-2);
+  --color-chart-1: var(--chart-1);
+  --color-ring: var(--ring);
+  --color-input: var(--input);
+  --color-border: var(--border);
+  --color-destructive: var(--destructive);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-accent: var(--accent);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-muted: var(--muted);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-secondary: var(--secondary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-primary: var(--primary);
+  --color-popover-foreground: var(--popover-foreground);
+  --color-popover: var(--popover);
+  --color-card-foreground: var(--card-foreground);
+  --color-card: var(--card);
+  --color-foreground: var(--foreground);
+  --color-background: var(--background);
+  --radius-sm: calc(var(--radius) * 0.6);
+  --radius-md: calc(var(--radius) * 0.8);
+  --radius-lg: var(--radius);
+  --radius-xl: calc(var(--radius) * 1.4);
+  --radius-2xl: calc(var(--radius) * 1.8);
+}
+
+:root,
+.dark {
+  --background: #090B10;
+  --foreground: #E2E4EC;
+  --card: #161A28;
+  --card-foreground: #E2E4EC;
+  --popover: #1E2335;
+  --popover-foreground: #E2E4EC;
+  --primary: #6366F1;
+  --primary-foreground: #F8FAFC;
+  --secondary: #1A1E2C;
+  --secondary-foreground: #E2E4EC;
+  --muted: #252A3A;
+  --muted-foreground: #99A1B8;
+  --accent: #1E2335;
+  --accent-foreground: #E2E4EC;
+  --destructive: #EF4444;
+  --border: #252A3A;
+  --input: #252A3A;
+  --ring: #6366F1;
+  --chart-1: #6366F1;
+  --chart-2: #818CF8;
+  --chart-3: #22C55E;
+  --chart-4: #F59E0B;
+  --chart-5: #38BDF8;
+  --radius: 0.625rem;
+  --sidebar: #0B0D16;
+  --sidebar-foreground: #E2E4EC;
+  --sidebar-primary: #6366F1;
+  --sidebar-primary-foreground: #F8FAFC;
+  --sidebar-accent: #1E2335;
+  --sidebar-accent-foreground: #E2E4EC;
+  --sidebar-border: #252A3A;
+  --sidebar-ring: #6366F1;
+}
+
+@layer base {
+  html {
+    scroll-behavior: smooth;
+    @apply font-sans;
+  }
+
+  body {
+    @apply bg-background text-foreground antialiased;
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    color: var(--color-jm-text-bright);
+    font-weight: 600;
+    letter-spacing: -0.01em;
+  }
+
+  a {
+    color: var(--color-jm-primary-light);
+    text-decoration: none;
+    transition: color 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  a:hover {
+    color: var(--color-jm-primary);
+    text-decoration: underline;
+  }
+
+  ::-webkit-scrollbar {
+    width: 6px;
+    height: 6px;
+  }
+
+  ::-webkit-scrollbar-track {
+    background-color: var(--color-jm-bg);
+  }
+
+  ::-webkit-scrollbar-thumb {
+    background-color: var(--color-jm-border);
+    border-radius: 3px;
+  }
+
+  ::-webkit-scrollbar-thumb:hover {
+    background-color: var(--color-jm-border-light);
+  }
+
+  * {
+    @apply border-border;
+  }
+
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after {
+      animation-duration: 0.01ms !important;
+      animation-iteration-count: 1 !important;
+      transition-duration: 0.01ms !important;
+      scroll-behavior: auto !important;
+    }
+  }
+}
+
+@layer utilities {
+  .glass {
+    background-color: color-mix(in srgb, var(--color-jm-surface) 80%, transparent);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--color-jm-border);
+  }
+
+  .card-hover {
+    transition: all 180ms cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  .card-hover:hover {
+    background-color: var(--color-jm-card-hover);
+    border-color: var(--color-jm-border-light);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.5);
+    transform: translateY(-1px);
+  }
+
+  .text-gradient {
+    background: linear-gradient(135deg, var(--color-jm-primary-light), var(--color-jm-primary));
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+  }
+
+  .focus-ring:focus-visible {
+    outline: none;
+    box-shadow: 0 0 0 3px var(--color-jm-primary-ring);
+  }
+}

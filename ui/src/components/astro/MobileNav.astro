@@ -1,0 +1,49 @@
+---
+import { Icon } from 'astro-icon/components';
+
+export interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+
+const navItems = [
+  { href: '/', label: 'Ofertas', icon: 'lucide:briefcase-business' },
+  { href: '/detected', label: 'Detectadas', icon: 'lucide:bell-ring' },
+  { href: '/interview', label: 'Entrevista', icon: 'lucide:mic' },
+  { href: '/saved', label: 'Favoritos', icon: 'lucide:star' },
+  { href: '/automation', label: 'Auto', icon: 'lucide:zap' },
+  { href: '/summary', label: 'Resumen', icon: 'lucide:bar-chart-3' },
+];
+
+const isActive = (href: string) => {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
+};
+---
+
+<nav
+  class="fixed bottom-0 left-0 right-0 z-50 grid grid-cols-6 border-t border-jm-border bg-jm-surface/95 backdrop-blur-lg lg:hidden"
+  aria-label="Navegación móvil"
+>
+  {
+    navItems.map((item) => {
+      const active = isActive(item.href);
+      return (
+        <a
+          href={item.href}
+          aria-current={active ? 'page' : undefined}
+          class:list={[
+            'flex flex-col items-center justify-center gap-0.5 py-2 text-[10px] font-medium transition-colors focus-ring',
+            active
+              ? 'text-jm-primary-light'
+              : 'text-jm-text-muted hover:text-jm-text',
+          ]}
+        >
+          <Icon name={item.icon} class="h-5 w-5" />
+          <span>{item.label}</span>
+        </a>
+      );
+    })
+  }
+</nav>

@@ -17,6 +17,9 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID", "")
 
 NOTIFIED_TTL_MINUTES = max(int(os.getenv("NOTIFIED_TTL_MINUTES", "1440")), 1)
 
+TELEGRAM_HEARTBEAT_ENABLED = os.getenv("TELEGRAM_HEARTBEAT_ENABLED", "false").lower() in ("1", "true", "yes", "on")
+TELEGRAM_HEARTBEAT_INTERVAL = max(int(os.getenv("TELEGRAM_HEARTBEAT_INTERVAL", "15")), 1)
+
 
 def _ensure_notified_table():
     conn = database._get_conn()
@@ -118,6 +121,7 @@ def _format_job_telegram(job: dict) -> str:
 # ====================== Automation ======================
 _automation_thread = None
 _automation_stop = threading.Event()
+_heartbeat_thread = None
 
 
 SYSTEM_FILTER = """You are a job-offer filter. Given a list of offers and a set of
@@ -241,11 +245,28 @@ def _automation_loop(profile: dict, keyword: str, interval_minutes: int, log_cal
             time.sleep(5)
 
 
+def _heartbeat_loop(interval_minutes: int, log_callback):
+    interval_secs = max(interval_minutes, 1) * 60
+    while not _automation_stop.is_set():
+        next_run = time.time() + interval_secs
+        while time.time() < next_run and not _automation_stop.is_set():
+            time.sleep(5)
+        if _automation_stop.is_set():
+            break
+        dt = datetime.now().strftime("%H:%M")
+        log_callback(f"[{dt}] Heartbeat de comunicación")
+        try:
+            send_telegram(f"💓 JobMatch [{dt}]: heartbeat activo · comunicación con Telegram OK.")
+        except Exception as e:
+            log_callback(f"[{dt}] Error enviando heartbeat: {e}")
+
+
 def start_automation(profile: dict, keyword: str = "", interval_minutes: int = 30,
                      log_callback=None, notifications_enabled: bool = True,
                      telegram_token: str = "", telegram_chat_id: str = "",
-                     modality: str = "") -> str | None:
-    global _automation_thread, _automation_stop, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
+                     modality: str = "", heartbeat_enabled: bool = None,
+                     heartbeat_interval_minutes: int = None) -> str | None:
+    global _automation_thread, _automation_stop, _heartbeat_thread, TELEGRAM_TOKEN, TELEGRAM_CHAT_ID
 
     if _automation_thread and _automation_thread.is_alive():
         return "La automatización ya está corriendo."
@@ -263,6 +284,22 @@ def start_automation(profile: dict, keyword: str = "", interval_minutes: int = 3
         daemon=True,
     )
     _automation_thread.start()
+
+    if heartbeat_enabled is None:
+        heartbeat_enabled = TELEGRAM_HEARTBEAT_ENABLED
+    if heartbeat_interval_minutes is None:
+        heartbeat_interval_minutes = TELEGRAM_HEARTBEAT_INTERVAL
+
+    if heartbeat_enabled and TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
+        _heartbeat_thread = threading.Thread(
+            target=_heartbeat_loop,
+            args=(max(heartbeat_interval_minutes, 1), log_callback or print),
+            daemon=True,
+        )
+        _heartbeat_thread.start()
+        if log_callback:
+            log_callback(f"[{datetime.now().strftime('%H:%M')}] Heartbeat activado cada {heartbeat_interval_minutes} minutos")
+
     if TELEGRAM_TOKEN and TELEGRAM_CHAT_ID:
         try:
             send_telegram(f"🚀 JobMatch: automatización iniciada. Buscando cada {interval_minutes} minutos.")
@@ -272,11 +309,14 @@ def start_automation(profile: dict, keyword: str = "", interval_minutes: int = 3
 
 
 def stop_automation() -> bool:
-    global _automation_thread, _automation_stop
+    global _automation_thread, _automation_stop, _heartbeat_thread
     _automation_stop.set()
     if _automation_thread and _automation_thread.is_alive():
         _automation_thread.join(timeout=3)
     _automation_thread = None
+    if _heartbeat_thread and _heartbeat_thread.is_alive():
+        _heartbeat_thread.join(timeout=3)
+    _heartbeat_thread = None
     return True
 
 

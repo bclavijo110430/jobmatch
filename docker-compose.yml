@@ -4,6 +4,7 @@ services:
     container_name: jobmatch-app
     network_mode: host
     environment:
+      PYTHONUNBUFFERED: "1"
       OLLAMA_BASE_URL: ${OLLAMA_BASE_URL:-http://localhost:11434/v1}
       OLLAMA_MODEL: ${OLLAMA_MODEL:-llama3.2:3b}
       FREELLMAPI_BASE_URL: ${FREELLMAPI_BASE_URL:-http://localhost:3001/v1}
@@ -17,6 +18,10 @@ services:
       AUTO_START: ${AUTO_START:-false}
       AUTO_INTERVAL: ${AUTO_INTERVAL:-30}
       AUTO_KEYWORD: ${AUTO_KEYWORD:-}
+      NOTIFIED_TTL_MINUTES: ${NOTIFIED_TTL_MINUTES:-1440}
+      TELEGRAM_HEARTBEAT_ENABLED: ${TELEGRAM_HEARTBEAT_ENABLED:-false}
+      TELEGRAM_HEARTBEAT_INTERVAL: ${TELEGRAM_HEARTBEAT_INTERVAL:-15}
+      CORS_ORIGINS: ${CORS_ORIGINS:-*}
     volumes:
       - jobmatch-data:/app/data
     restart: unless-stopped

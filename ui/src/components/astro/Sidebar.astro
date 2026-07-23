@@ -1,0 +1,69 @@
+---
+import { Icon } from 'astro-icon/components';
+import BackendSelector from '@/components/react/BackendSelector.jsx';
+
+export interface Props {
+  currentPath: string;
+}
+
+const { currentPath } = Astro.props;
+
+const navItems = [
+  { href: '/', label: 'Ofertas', icon: 'lucide:briefcase-business' },
+  { href: '/detected', label: 'Detectadas', icon: 'lucide:bell-ring' },
+  { href: '/interview', label: 'Entrevista', icon: 'lucide:mic' },
+  { href: '/saved', label: 'Favoritos', icon: 'lucide:star' },
+  { href: '/automation', label: 'Automatización', icon: 'lucide:zap' },
+  { href: '/summary', label: 'Resumen', icon: 'lucide:bar-chart-3' },
+];
+
+const isActive = (href: string) => {
+  if (href === '/') return currentPath === '/';
+  return currentPath.startsWith(href);
+};
+---
+
+<aside
+  class="fixed inset-y-0 left-0 z-40 hidden w-64 flex-col border-r border-jm-border bg-jm-surface lg:flex"
+  aria-label="Navegación principal"
+>
+  <div class="flex h-16 items-center gap-3 border-b border-jm-border px-6">
+    <div class="flex h-9 w-9 items-center justify-center rounded-lg bg-jm-primary text-white">
+      <Icon name="lucide:briefcase-business" class="h-5 w-5" />
+    </div>
+    <span class="text-lg font-bold text-jm-text-bright">JobMatch</span>
+  </div>
+
+  <div class="border-b border-jm-border p-4">
+    <BackendSelector client:load />
+  </div>
+
+  <nav class="flex-1 space-y-1 p-4">
+    {
+      navItems.map((item) => {
+        const active = isActive(item.href);
+        return (
+          <a
+            href={item.href}
+            aria-current={active ? 'page' : undefined}
+            class:list={[
+              'flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors focus-ring',
+              active
+                ? 'bg-jm-primary-soft text-jm-primary-light'
+                : 'text-jm-text-secondary hover:bg-jm-surface-hover hover:text-jm-text',
+            ]}
+          >
+            <Icon name={item.icon} class="h-[18px] w-[18px]" />
+            {item.label}
+          </a>
+        );
+      })
+    }
+  </nav>
+
+  <div class="border-t border-jm-border p-4">
+    <p class="text-xs text-jm-text-muted">
+      JobMatch · Astro + FastAPI
+    </p>
+  </div>
+</aside>

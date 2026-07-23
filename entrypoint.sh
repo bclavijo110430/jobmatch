@@ -1,5 +1,7 @@
 #!/bin/bash
-# JobMatch entrypoint: start automation (if enabled) + Streamlit app
+# JobMatch entrypoint: start automation (if enabled) + FastAPI app
+
+set -e
 
 echo "=== JobMatch starting ==="
 
@@ -9,6 +11,6 @@ if [ "${AUTO_START:-false}" = "true" ]; then
     python3 -m src.auto_starter &
 fi
 
-# Start Streamlit app
-echo "[entrypoint] Launching Streamlit..."
-exec streamlit run app.py --server.address 0.0.0.0
+# Start FastAPI + static Astro UI
+echo "[entrypoint] Launching FastAPI server..."
+exec uvicorn api.main:app --host 0.0.0.0 --port 8501

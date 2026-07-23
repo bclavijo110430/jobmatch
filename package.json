@@ -1,0 +1,19 @@
+{
+  "name": "jobmatch",
+  "version": "1.0.0",
+  "private": true,
+  "description": "JobMatch - Smart Job Search",
+  "scripts": {
+    "dev": "concurrently \"pnpm dev:api\" \"pnpm dev:ui\"",
+    "dev:ui": "pnpm --filter ui dev",
+    "dev:api": "uvicorn api.main:app --reload --host 0.0.0.0 --port 8501",
+    "build": "pnpm --filter ui build",
+    "build:ui": "pnpm --filter ui build",
+    "preview": "pnpm --filter ui preview",
+    "start": "uvicorn api.main:app --host 0.0.0.0 --port 8501"
+  },
+  "devDependencies": {
+    "concurrently": "^9.0.0"
+  },
+  "packageManager": "pnpm@11.3.0"
+}

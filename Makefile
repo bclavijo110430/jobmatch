@@ -1,4 +1,4 @@
-.PHONY: help start start-all stop build up down logs shell ollama-serve ollama-pull clean run-local freellmapi-up freellmapi-down freellmapi-serve freellmapi-logs
+.PHONY: help start start-all stop build up down logs shell ollama-serve ollama-pull clean run-local dev build-ui freellmapi-up freellmapi-down freellmapi-logs freellmapi-serve
 
 help:
 	@echo "JobMatch - Makefile"
@@ -14,7 +14,9 @@ help:
 	@echo "shell         docker compose exec app bash"
 	@echo "ollama-serve  check/start ollama serve on host"
 	@echo "ollama-pull   ollama pull llama3.2:3b"
-	@echo "run-local     streamlit run app.py (without Docker)"
+	@echo "run-local     uvicorn api.main:app --reload (solo backend)"
+	@echo "dev           backend + frontend Astro en modo desarrollo"
+	@echo "build-ui      compila el frontend Astro"
 	@echo "clean         down + remove orphans"
 	@echo ""
 	@echo "FreeLLMAPI (opcional):"
@@ -109,7 +111,16 @@ ollama-pull:
 	ollama pull llama3.2:3b
 
 run-local:
-	streamlit run app.py --server.address 0.0.0.0
+	uvicorn api.main:app --reload --host 0.0.0.0 --port 8501
+
+dev:
+	pnpm dev
+
+build-ui:
+	pnpm build:ui
+
+clean:
+	docker compose down --rmi all --volumes --remove-orphans
 
 freellmapi-up:
 	@if [ -f .env ] && grep -q "^FREELLMAPI_ENCRYPTION_KEY" .env && [ -n "$$(grep '^FREELLMAPI_ENCRYPTION_KEY' .env | cut -d= -f2)" ]; then \
@@ -136,6 +147,3 @@ freellmapi-serve:
 	else \
 		echo "FreeLLMAPI is NOT running. Run: make freellmapi-up"; \
 	fi
-
-clean:
-	docker compose down --rmi all --volumes --remove-orphans
